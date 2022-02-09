@@ -22,7 +22,7 @@ func ExportStation(station gasbuddy.Station, config helpers.Config) {
 
 		// check if entry is already stored, only consider last 7 days
 		query := `from(bucket: "` + config.Bucket + `") 
-		|> range(start: -2d) 
+		|> range(start: -7d) 
 		|> filter(fn: (r) => r["_measurement"] == "gas_buddy") 
 		|> filter(fn: (r) => r["stationId"] == "` + strconv.Itoa(station.Id) + `")
 		|> filter(fn: (r) => r["fuelType"] == "` + fuel.Name + `")
@@ -33,19 +33,30 @@ func ExportStation(station gasbuddy.Station, config helpers.Config) {
 			return
 		}
 
+		// update if DB entry is older than current one or if no data was found
+		update := false
+		numberOfResultObjects := 0
 		for result.Next() {
+			numberOfResultObjects++
 			if fuel.Updated.After(result.Record().Time()) {
-				log.Printf("Updating [%s] for [%s] - [%s]\n", fuel.Name, station.Name, station.Address)
-				// write gas price
-				point := influxdb2.NewPointWithMeasurement("gas_buddy").
-					AddTag("stationId", strconv.Itoa(station.Id)).
-					AddTag("name", station.Name).
-					AddTag("address", station.Address).
-					AddTag("fuelType", fuel.Name).
-					AddField("fuelPrice", fuel.Price).
-					SetTime(fuel.Updated)
-				writeAPI.WritePoint(point)
+				update = true
 			}
+		}
+		if numberOfResultObjects == 0 {
+			update = true
+		}
+
+		if update {
+			log.Printf("Updating [%s] for [%s] - [%s]\n", fuel.Name, station.Name, station.Address)
+			// write gas price
+			point := influxdb2.NewPointWithMeasurement("gas_buddy").
+				AddTag("stationId", strconv.Itoa(station.Id)).
+				AddTag("name", station.Name).
+				AddTag("address", station.Address).
+				AddTag("fuelType", fuel.Name).
+				AddField("fuelPrice", fuel.Price).
+				SetTime(fuel.Updated)
+			writeAPI.WritePoint(point)
 		}
 	}
 

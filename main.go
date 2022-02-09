@@ -36,6 +36,7 @@ func updateMetrics() {
 
 	// get gas prices and export to influxdb
 	for _, stationId := range config.Stations {
+		log.Printf("Getting data for [%d]\n", stationId)
 		station, err := gasbuddy.GetStationInfo(stationId)
 		if err == nil {
 			influxdb.ExportStation(station, config)
